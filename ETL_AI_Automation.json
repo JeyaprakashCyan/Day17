@@ -1,0 +1,381 @@
+{
+  "name": "ETL_AI_Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "File Upload",
+        "formDescription": "Upload student data",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "File Upload",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -976,
+        -48
+      ],
+      "id": "f8b52651-ac32-4015-b312-f776d1b614ea",
+      "name": "On form submission",
+      "webhookId": "e5550383-ee97-4504-a979-3bbb444e228e"
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "File_Upload",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        -48
+      ],
+      "id": "9c784b24-c2ae-4e2c-8745-cb4246658761",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Clean this student enrollment row and return ONLY a JSON object.\nRow data: {{ JSON.stringify($json) }}\nRules:\n- Name: Title Case\n- Email: if invalid (no @ or no .com/.in) set INVALID_EMAIL\n- Phone: if less than 10 digits or empty set MISSING\n- Course: only Python or Machine Learning or Data Science\n- Fee_Paid: yes/YES = true, no/NO = false\n- City: Title Case, empty = UNKNOWN\n- Enrolled_Date: YYYY-MM-DD format\nReturn ONLY raw JSON. No explanation. No markdown.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -544,
+        -48
+      ],
+      "id": "d9c1ca55-b3b7-4bc3-b798-5371a93e5c39",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -608,
+        128
+      ],
+      "id": "4b085aed-f0e4-4f2f-9859-4a6e9886c628",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "XAT5rqiMN4Yc5eKl",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst phoneRegex = /^\\d{10}$/;\n\nconst output = [];\n\nfor (const item of items) {\n\n  // Get JSON string from the text field\n  let data;\n\n  try {\n    data = JSON.parse(item.json.text);\n  } catch (error) {\n    output.push({\n      json: {\n        Error: \"Invalid JSON in text field\",\n        Raw_Text: item.json.text,\n        Record_Valid: false,\n        Cleaned: false\n      }\n    });\n\n    continue;\n  }\n\n  // Trim all string values\n  for (const key of Object.keys(data)) {\n    if (typeof data[key] === \"string\") {\n      data[key] = data[key].trim();\n    }\n  }\n\n  // Email validation\n  const emailValid = emailRegex.test(data.Email || \"\");\n\n  // Phone validation\n  const phoneValid = phoneRegex.test(\n    String(data.Phone || \"\")\n  );\n\n  // Required fields\n  const requiredFields = [\n    \"Student_ID\",\n    \"Name\",\n    \"Email\",\n    \"Phone\",\n    \"Course\",\n    \"City\",\n    \"Enrolled_Date\"\n  ];\n\n  const missingFields = requiredFields.filter(field =>\n    data[field] === undefined ||\n    data[field] === null ||\n    String(data[field]).trim() === \"\"\n  );\n\n  // Overall record validation\n  const recordValid =\n    emailValid &&\n    phoneValid &&\n    missingFields.length === 0;\n\n  // Add cleaned record\n  output.push({\n    json: {\n      Student_ID: data.Student_ID,\n      Name: data.Name,\n      Email: data.Email,\n      Phone: data.Phone,\n      Course: data.Course,\n      Fee_Paid: data.Fee_Paid,\n      City: data.City,\n      Enrolled_Date: data.Enrolled_Date,\n\n      Email_Valid: emailValid,\n      Phone_Valid: phoneValid,\n      Missing_Fields: missingFields,\n      Record_Valid: recordValid,\n      Cleaned: true\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -48
+      ],
+      "id": "fd776573-de0d-4cdd-b750-8bd8102ea31a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d3714486-e847-482d-8877-9d82026ab025",
+                    "leftValue": "={{   $json.City === \"Chennai\" && $json.Email_Valid === true     ? \"CHENNAI_VALID\"     : $json.City === \"Chennai\" && $json.Email_Valid === false       ? \"CHENNAI_INVALID\"       : $json.City !== \"Chennai\" && $json.Email_Valid === true         ? \"OTHER_VALID\"         : \"OTHER_INVALID\" }}",
+                    "rightValue": "CHENNAI_VALID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Chennai - Valid Email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "bef026b5-d3dc-4211-8f4a-ff94689621ca",
+                    "leftValue": "={{   $json.City === \"Chennai\" && $json.Email_Valid === true     ? \"CHENNAI_VALID\"     : $json.City === \"Chennai\" && $json.Email_Valid === false       ? \"CHENNAI_INVALID\"       : $json.City !== \"Chennai\" && $json.Email_Valid === true         ? \"OTHER_VALID\"         : \"OTHER_INVALID\" }}",
+                    "rightValue": "CHENNAI_INVALID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Chennai - Invalid Email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4af3fd41-5c1f-4a0e-82ef-202e8f8682d6",
+                    "leftValue": "={{   $json.City === \"Chennai\" && $json.Email_Valid === true     ? \"CHENNAI_VALID\"     : $json.City === \"Chennai\" && $json.Email_Valid === false       ? \"CHENNAI_INVALID\"       : $json.City !== \"Chennai\" && $json.Email_Valid === true         ? \"OTHER_VALID\"         : \"OTHER_INVALID\" }}",
+                    "rightValue": "=OTHER_VALID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Other City - Valid Email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "eaa08fee-46ea-42f9-bc04-fd99cd81bbc0",
+                    "leftValue": "={{   $json.City === \"Chennai\" && $json.Email_Valid === true     ? \"CHENNAI_VALID\"     : $json.City === \"Chennai\" && $json.Email_Valid === false       ? \"CHENNAI_INVALID\"       : $json.City !== \"Chennai\" && $json.Email_Valid === true         ? \"OTHER_VALID\"         : \"OTHER_INVALID\" }}",
+                    "rightValue": "OTHER_INVALID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Other City - Invalid Email"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        48,
+        -80
+      ],
+      "id": "7e947dd2-8868-4a66-881e-c0d60e2e8ebf",
+      "name": "Switch",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "options": {
+          "fileName": "Chennai_invalid_emaildata.csv"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        -64
+      ],
+      "id": "a2df93b2-39f4-40e6-a2ae-6868aa3587e4",
+      "name": "CHE_INV"
+    },
+    {
+      "parameters": {
+        "options": {
+          "fileName": "chennai_valid_email.csv"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        -240
+      ],
+      "id": "7b22e7bd-e1cb-4f56-a7e7-06fb4097a001",
+      "name": "CHE_VA"
+    },
+    {
+      "parameters": {
+        "options": {
+          "fileName": "Other_valid_email.csv"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        96
+      ],
+      "id": "cf547436-0fa3-464f-9db1-d53184349e70",
+      "name": "OTH_VA"
+    },
+    {
+      "parameters": {
+        "options": {
+          "fileName": "Other_invalid_email.csv"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        288
+      ],
+      "id": "4cd2b7de-9400-4ca4-97b1-46d6a4d304d8",
+      "name": "OTH_INV"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "CHE_VA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CHE_INV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OTH_VA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OTH_INV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9a9f7bbf-4534-4563-8630-f7b8db6d3b33",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4c7449834b32642caafcdeaf351d2aa0df6f87164539faf4888a164a3768edb5"
+  },
+  "nodeGroups": [],
+  "id": "jATu7raLw6Qnscyn",
+  "tags": []
+}
